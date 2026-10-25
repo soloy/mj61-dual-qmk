@@ -1,0 +1,60 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # qmk_firmware master the firmware was tested with
+  QMK_COMMIT: 180f394b489c238cb231c2bf8b080262155e03c0
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: ghcr.io/qmk/qmk_cli
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check out qmk_firmware
+        run: |
+          git init qmk_firmware
+          cd qmk_firmware
+          git remote add origin https://github.com/qmk/qmk_firmware
+          git fetch --depth 1 origin "$QMK_COMMIT"
+          git checkout FETCH_HEAD
+          git submodule update --init --recursive --depth 1
+
+      - name: Build
+        run: |
+          cp -r keyboards/melgeek/mj61_dual qmk_firmware/keyboards/melgeek/
+          cd qmk_firmware
+          qmk compile -kb melgeek/mj61_dual -km via
+          qmk compile -kb melgeek/mj61_dual -km default
+          cp melgeek_mj61_dual_*.bin .build/melgeek_mj61_dual_*.elf ..
+          cd ..
+          python3 tools/mj61_dual_flash.py check melgeek_mj61_dual_via.bin
+          python3 tools/mj61_dual_flash.py check melgeek_mj61_dual_default.bin
+          sha256sum melgeek_mj61_dual_*.bin | tee SHA256SUMS
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: firmware
+          path: |
+            melgeek_mj61_dual_*.bin
+            melgeek_mj61_dual_*.elf
+            SHA256SUMS
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: |
+            melgeek_mj61_dual_*.bin
+            SHA256SUMS
+            mj61_dual.via.json
+            tools/mj61_dual_flash.py
