@@ -53,6 +53,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
         with:
+          generate_release_notes: true
           files: |
             melgeek_mj61_dual_*.bin
             SHA256SUMS
